@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 
+// Defines the structure for each checklist item
 struct ChecklistItem: Identifiable {
     let id = UUID()
     var title: String
@@ -16,33 +17,40 @@ struct ChecklistItem: Identifiable {
 }
 
 struct ContentView: View {
+    // State to hold the list of checklist items
     @State private var checklistItems: [ChecklistItem] = []
     
+    // Constants for card dimensions and layout
     let cardHeight: CGFloat = 120
     let cardSpacing: CGFloat = 15
     let compressionLineOffset: CGFloat = 200
+    let completedCardHeight: CGFloat = 60 // Height of a completed (compressed) card
+    let completedCardSpacing: CGFloat = 5 // Spacing between completed cards
     
     var body: some View {
         NavigationView {
             ZStack(alignment: .top) {
                 ScrollView {
-                    VStack(spacing: cardSpacing) {
+                    VStack(spacing: 0) { // Zero spacing, handled individually for each card
                         ForEach(Array(checklistItems.enumerated()), id: \.element.id) { index, item in
                             CompressibleCardView(item: $checklistItems[index], 
                                                  cardHeight: cardHeight,
+                                                 completedCardHeight: completedCardHeight,
                                                  compressionLineOffset: compressionLineOffset)
+                                .padding(.bottom, item.isChecked ? completedCardSpacing : cardSpacing)
                         }
                     }
                     .padding(.top, compressionLineOffset)
                     .padding()
                 }
+                .coordinateSpace(name: "scroll") // Named coordinate space for scroll position tracking
                 
+                // Red line indicating the compression threshold
                 Rectangle()
                     .fill(Color.red)
                     .frame(height: 2)
                     .offset(y: compressionLineOffset)
             }
-            .navigationTitle("Financial Checklist")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: resetChecklist) {
@@ -54,6 +62,7 @@ struct ContentView: View {
         .onAppear(perform: initializeChecklist)
     }
     
+    // Initializes the checklist with predefined items
     private func initializeChecklist() {
         checklistItems = [
             ChecklistItem(title: "Review monthly budget", isChecked: false, insight: getRandomInsight()),
@@ -75,6 +84,7 @@ struct ContentView: View {
         ]
     }
     
+    // Resets the checklist to its initial state
     private func resetChecklist() {
         withAnimation {
             initializeChecklist()
@@ -82,19 +92,23 @@ struct ContentView: View {
     }
 }
 
+// View for each compressible card in the checklist
 struct CompressibleCardView: View {
     @Binding var item: ChecklistItem
     let cardHeight: CGFloat
+    let completedCardHeight: CGFloat
     let compressionLineOffset: CGFloat
     
     var body: some View {
         GeometryReader { geometry in
-            let minY = geometry.frame(in: .global).minY
+            // Calculate compression based on scroll position
+            let minY = geometry.frame(in: .named("scroll")).minY
             let distanceFromCompressionLine = minY - compressionLineOffset
             let compressionAmount = max(0, min(cardHeight / 2, -distanceFromCompressionLine))
             let compressionPercentage = compressionAmount / (cardHeight / 2)
             
             VStack(alignment: .leading, spacing: 10) {
+                // Card title and checkbox
                 HStack {
                     Image(systemName: item.isChecked ? "checkmark.square.fill" : "square")
                         .foregroundColor(item.isChecked ? .green : .gray)
@@ -104,6 +118,7 @@ struct CompressibleCardView: View {
                     Spacer()
                 }
                 
+                // Card insight (hidden when fully compressed or checked)
                 if compressionPercentage < 1 && !item.isChecked {
                     Text(item.insight)
                         .font(.subheadline)
@@ -118,13 +133,14 @@ struct CompressibleCardView: View {
             }
             .padding()
             .frame(maxWidth: .infinity)
-            .frame(height: item.isChecked ? cardHeight / 4 : cardHeight - compressionAmount)
+            .frame(height: item.isChecked ? completedCardHeight : cardHeight - compressionAmount)
             .background(Color.white)
             .cornerRadius(10)
             .shadow(radius: 3)
-            .offset(y: item.isChecked ? -compressionLineOffset : 0)
+            .offset(y: item.isChecked ? -compressionLineOffset : -compressionAmount)
             .animation(.easeInOut(duration: 0.1), value: compressionAmount)
             .onChange(of: compressionPercentage) { _, newValue in
+                // Mark item as checked when fully compressed
                 if newValue >= 0.99 && !item.isChecked {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         item.isChecked = true
@@ -132,10 +148,11 @@ struct CompressibleCardView: View {
                 }
             }
         }
-        .frame(height: cardHeight)
+        .frame(height: item.isChecked ? completedCardHeight : cardHeight)
     }
 }
 
+// PreferenceKey for tracking scroll offset
 struct ScrollOffsetPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
@@ -143,11 +160,13 @@ struct ScrollOffsetPreferenceKey: PreferenceKey {
     }
 }
 
+// Function to get a random financial insight
 func getRandomInsight() -> String {
     let insights = getInsights()
     return insights.randomElement() ?? ""
 }
 
+// Function to provide a list of financial insights
 func getInsights() -> [String] {
     return [
         "Saving 20% of your income can significantly boost your financial security.",
@@ -163,6 +182,7 @@ func getInsights() -> [String] {
     ]
 }
 
+// Preview provider for SwiftUI canvas
 #Preview {
     ContentView()
 }
