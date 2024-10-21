@@ -159,7 +159,13 @@ struct CompressibleCardView: View {
             .padding()
             .frame(maxWidth: .infinity)
             .frame(height: cardHeight)
-            .background(Color.white)
+            .background(
+                ZStack {
+                    Color.white
+                    Color.init(red: 0.133, green: 0.545, blue: 0.133) // Forest Green
+                        .opacity(compressionPercentage)
+                }
+            )
             .cornerRadius(10)
             .shadow(radius: 3)
             .scaleEffect(
