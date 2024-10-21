@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 // Defines the structure for each checklist item
 struct ChecklistItem: Identifiable {
@@ -99,6 +100,8 @@ struct CompressibleCardView: View {
     let compressionLineOffset: CGFloat
     let compressionThreshold: CGFloat
     
+    @State private var lastCompressionPercentage: CGFloat = 0
+    
     var body: some View {
         GeometryReader { geometry in
             // Use GeometryReader to access the view's position and size within its parent
@@ -166,12 +169,22 @@ struct CompressibleCardView: View {
             .offset(y: item.isChecked ? -compressionLineOffset : max(-compressionAmount, -distanceFromCompressionLine))
             .animation(.easeInOut(duration: 0.05), value: compressionAmount)
             .onChange(of: compressionPercentage) { _, newValue in
+                // Check if the compression percentage has just reached the threshold
+                if newValue >= compressionThreshold && lastCompressionPercentage < compressionThreshold {
+                    // Provide strong haptic feedback when compression threshold is reached
+                    let impact = UIImpactFeedbackGenerator(style: .heavy)
+                    impact.impactOccurred(intensity: 1.0)
+                }
+                
                 // Mark item as checked when compression threshold is reached
                 if newValue >= compressionThreshold && !item.isChecked {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         item.isChecked = true
                     }
                 }
+                
+                // Update the last compression percentage
+                lastCompressionPercentage = newValue
             }
         }
         .frame(height: cardHeight)
