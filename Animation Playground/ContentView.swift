@@ -22,10 +22,10 @@ struct ContentView: View {
     
     // Constants for card dimensions and layout
     let cardHeight: CGFloat = 120
-    let cardSpacing: CGFloat = 15
-    let compressionLineOffset: CGFloat = 200
-    let completedCardHeight: CGFloat = 60 // Height of a completed (compressed) card
-    let completedCardSpacing: CGFloat = 5 // Spacing between completed cards
+    let cardSpacing: CGFloat = 10
+    let compressionLineOffset: CGFloat = 150
+    let completedCardSpacing: CGFloat = 10 // Spacing between completed cards
+    let compressionThreshold: CGFloat = 0.8 // Compression required to be marked as completed
     
     var body: some View {
         NavigationView {
@@ -35,8 +35,8 @@ struct ContentView: View {
                         ForEach(Array(checklistItems.enumerated()), id: \.element.id) { index, item in
                             CompressibleCardView(item: $checklistItems[index], 
                                                  cardHeight: cardHeight,
-                                                 completedCardHeight: completedCardHeight,
-                                                 compressionLineOffset: compressionLineOffset)
+                                                 compressionLineOffset: compressionLineOffset,
+                                                 compressionThreshold: compressionThreshold)
                                 .padding(.bottom, item.isChecked ? completedCardSpacing : cardSpacing)
                         }
                     }
@@ -96,16 +96,30 @@ struct ContentView: View {
 struct CompressibleCardView: View {
     @Binding var item: ChecklistItem
     let cardHeight: CGFloat
-    let completedCardHeight: CGFloat
     let compressionLineOffset: CGFloat
+    let compressionThreshold: CGFloat
     
     var body: some View {
         GeometryReader { geometry in
-            // Calculate compression based on scroll position
+            // Use GeometryReader to access the view's position and size within its parent
+            
+            // Calculate the vertical position (Y-coordinate) of the top edge of this view
+            // within the coordinate space named "scroll" (likely a ScrollView)
             let minY = geometry.frame(in: .named("scroll")).minY
+            
+            // Calculate how far the top of the view is from the compression start line
+            // A positive value means the view is below the line, negative means it's above
             let distanceFromCompressionLine = minY - compressionLineOffset
-            let compressionAmount = max(0, min(cardHeight / 2, -distanceFromCompressionLine))
-            let compressionPercentage = compressionAmount / (cardHeight / 2)
+            
+            // Determine the amount of compression to apply:
+            // - If distanceFromCompressionLine is positive, no compression (max with 0)
+            // - Otherwise, compress up to the difference between full and compressed height
+            // - The negative sign inverts distanceFromCompressionLine for the calculation
+            let compressionAmount = max(0, min(cardHeight, -distanceFromCompressionLine))
+            
+            // Calculate the percentage of compression applied
+            // 0% means no compression, 100% means fully compressed
+            let compressionPercentage = compressionAmount / (cardHeight)
             
             VStack(alignment: .leading, spacing: 10) {
                 // Card title and checkbox
@@ -115,6 +129,7 @@ struct CompressibleCardView: View {
                     Text(item.title)
                         .font(.headline)
                         .strikethrough(item.isChecked)
+                        .opacity(1 - compressionPercentage)
                     Spacer()
                 }
                 
@@ -127,28 +142,39 @@ struct CompressibleCardView: View {
                 }
                 
                 // Debug information
-                Text("Y: \(minY, specifier: "%.2f"), Compression: \(compressionPercentage, specifier: "%.2f")")
+                Text("Y: \(minY, specifier: "%.2f"), Compression%: \(compressionPercentage, specifier: "%.2f")")
                     .font(.caption)
                     .foregroundColor(.gray)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Text("CompressAmount: \(compressionAmount, specifier: "%.2f"), DistFromCompressLine: \(distanceFromCompressionLine, specifier: "%.2f")")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
             .padding()
             .frame(maxWidth: .infinity)
-            .frame(height: item.isChecked ? completedCardHeight : cardHeight - compressionAmount)
+            .frame(height: cardHeight)
             .background(Color.white)
             .cornerRadius(10)
             .shadow(radius: 3)
-            .offset(y: item.isChecked ? -compressionLineOffset : -compressionAmount)
-            .animation(.easeInOut(duration: 0.1), value: compressionAmount)
+            .scaleEffect(
+                y: item.isChecked ? 1 : 1 - compressionPercentage,
+                anchor: .top
+            )
+            .offset(y: item.isChecked ? -compressionLineOffset : max(-compressionAmount, -distanceFromCompressionLine))
+            .animation(.easeInOut(duration: 0.05), value: compressionAmount)
             .onChange(of: compressionPercentage) { _, newValue in
-                // Mark item as checked when fully compressed
-                if newValue >= 0.99 && !item.isChecked {
+                // Mark item as checked when compression threshold is reached
+                if newValue >= compressionThreshold && !item.isChecked {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         item.isChecked = true
                     }
                 }
             }
         }
-        .frame(height: item.isChecked ? completedCardHeight : cardHeight)
+        .frame(height: cardHeight)
     }
 }
 
